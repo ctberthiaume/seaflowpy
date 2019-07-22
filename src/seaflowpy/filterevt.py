@@ -144,17 +144,19 @@ def do_filter(work_q, opps_q):
             evt_df = particleops.mark_focused(evt_df, work["filter_params"])
             work["all_count"] = len(evt_df.index)
             work["evt_count"] = len(evt_df[~evt_df["noise"]].index)
-            work["opp"] = particleops.select_focused(evt_df)
+            opp = particleops.select_focused(evt_df)
+            # only consider 50% quantile for reporting
+            work["opp_count"] = len(opp[opp["q50"]].index)
         except Exception as e:
             work["error"] = f"Unexpected error when selecting focused partiles in file {evt_file}: {e}"
-        # Write to OPP file if all quantiles have focused data. Would like to
-        # write in a different process (do_save) but this quickly becomes a
-        # significant bottleneck.
-        try:
-            if work["opp_dir"]:
-                fileio.write_opp_labview(work["opp"], work["file"], work["opp_dir"])
-        except Exception as e:
-            work["error"] = f"Unexpected error when saving file {evt_file}: {e}"
+        # # Write to OPP file if all quantiles have focused data. Would like to
+        # # write in a different process (do_save) but this quickly becomes a
+        # # significant bottleneck.
+        # try:
+        #     if work["opp_dir"]:
+        #         fileio.write_opp_labview(work["opp"], work["file"], work["opp_dir"])
+        # except Exception as e:
+        #     work["error"] = f"Unexpected error when saving file {evt_file}: {e}"
 
         opps_q.put(work)
         work = work_q.get()
@@ -174,15 +176,15 @@ def do_save(opps_q, stats_q, files_left):
 
         files_left -= 1
 
-        try:
-            # Save to DB
-            if work["dbpath"]:
-                filter_id = work["filter_params"]["id"].unique().tolist()[0]
-                db.save_opp_to_db(work["file"], work["opp"], work["all_count"],
-                    work["evt_count"], filter_id, work["dbpath"])
-                db.save_outlier(work["file"], 0, work["dbpath"])
-        except Exception as e:
-            work["error"] = "Unexpected error when saving file {} to db: {}".format(work["file"], e)
+        # try:
+        #     # Save to DB
+        #     if work["dbpath"]:
+        #         filter_id = work["filter_params"]["id"].unique().tolist()[0]
+        #         db.save_opp_to_db(work["file"], work["opp"], work["all_count"],
+        #             work["evt_count"], filter_id, work["dbpath"])
+        #         db.save_outlier(work["file"], 0, work["dbpath"])
+        # except Exception as e:
+        #     work["error"] = "Unexpected error when saving file {} to db: {}".format(work["file"], e)
 
         stats_q.put(work)
 
@@ -222,11 +224,9 @@ def do_reporting(stats_q, done_q, file_count, every):
             files_ok += 1
 
         opp = work["opp"]
-        # only consider 50% quantile for reporting
-        opp = opp[opp["q50"]]
         evt_count_block += work["all_count"]
         evt_signal_count_block += work["evt_count"]
-        opp_count_block += len(opp.index)
+        opp_count_block += work["opp_count"]
 
         # Print progress periodically
         perc = float(i + 1) / file_count * 100  # Percent completed
