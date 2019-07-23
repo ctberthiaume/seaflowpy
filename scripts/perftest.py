@@ -17,7 +17,10 @@ def cmd(filter_, verbose, files):
     if filter_:
         params = pandas.DataFrame.from_dict(filter_params)
     for f in files:
-        sfile = sfp.seaflowfile.SeaFlowFile(f)
+        try:
+            sfile = sfp.seaflowfile.SeaFlowFile(f)
+        except sfp.errors.FileError:
+            continue
         if sfile.is_evt:
             try:
                 evt_df = sfp.fileio.read_evt_labview(f)
